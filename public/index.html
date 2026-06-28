@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دردشة عشوائية</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; padding: 20px; }
+        .chat-container { width: 100%; max-width: 600px; background: white; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow: hidden; }
+        .messages { height: 400px; overflow-y: auto; padding: 20px; border-bottom: 1px solid #ddd; }
+        .message { margin-bottom: 10px; padding: 10px; border-radius: 5px; width: fit-content; max-width: 80%; }
+        .my-msg { background-color: #ffcc00; color: #000; margin-right: auto; }
+        .stranger-msg { background-color: #eee; color: #333; margin-left: auto; }
+        .system-msg { text-align: center; color: #888; font-size: 0.9em; width: 100%; margin: 10px 0; font-weight: bold; }
+        .input-area { display: flex; padding: 10px; background: #fafafa; }
+        input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; outline: none; }
+        button { padding: 10px 20px; border: none; background-color: #333; color: white; border-radius: 5px; cursor: pointer; margin-right: 10px; }
+        button:hover { background-color: #555; }
+    </style>
+</head>
+<body>
+
+    <div class="chat-container">
+        <div class="messages" id="messages"></div>
+        <div class="input-area">
+            <input type="text" id="msgInput" placeholder="اكتب رسالتك هنا..." disabled>
+            <button id="sendBtn" disabled>إرسال</button>
+            <button id="nextBtn" onclick="location.reload()">تخطي (التالي)</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const messages = document.getElementById('messages');
+        const msgInput = document.getElementById('msgInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        function addMessage(text, type) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            div.className = `message ${type}`;
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        socket.on('waiting', (msg) => addMessage(msg, 'system-msg'));
+        
+        socket.on('chat start', (msg) => {
+            addMessage(msg, 'system-msg');
+            msgInput.disabled = false;
+            sendBtn.disabled = false;
+            msgInput.focus();
+        });
+
+        socket.on('partner disconnected', (msg) => {
+            addMessage(msg, 'system-msg');
+            msgInput.disabled = true;
+            sendBtn.disabled = true;
+        });
+
+        socket.on('chat message', (msg) => {
+            addMessage(`الغريب: ${msg}`, 'stranger-msg');
+        });
+
+        function sendMessage() {
+            const text = msgInput.value.trim();
+            if (text) {
+                socket.emit('chat message', text);
+                addMessage(`أنت: ${text}`, 'my-msg');
+                msgInput.value = '';
+            }
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        msgInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>
