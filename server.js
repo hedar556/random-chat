@@ -5,40 +5,49 @@ const io = require('socket.io')(http);
 
 app.use(express.static('public'));
 
-// قائمة المستخدمين المنتظرين
 let waitingUsers = [];
+let bannedIPs = []; // قائمة عناوين الـ IP المحظورة
+
+// قائمة الكلمات الممنوعة (يمكنك إضافة المزيد داخل الأقواس)
+const badWords = ['كلمة1', 'كلمة2', 'سيء'];
 
 io.on('connection', (socket) => {
-    console.log('مستخدم متصل:', socket.id);
+    // الحصول على عنوان الـ IP الحقيقي للمستخدم (مهم جداً في الاستضافات مثل Render)
+    const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.request.connection.remoteAddress;
 
-    // دالة البحث عن شريك
+    // 1. التحقق مما إذا كان المستخدم محظوراً قبل السماح له بالدخول
+    if (bannedIPs.includes(clientIp)) {
+        socket.emit('banned', 'لقد تم حظرك من استخدام الموقع بسبب انتهاك القوانين.');
+        socket.disconnect(); // قطع الاتصال فوراً
+        return;
+    }
+
+    console.log('مستخدم متصل:', socket.id, 'IP:', clientIp);
+
+    // دالة البحث عن شريك (مع الاهتمامات)
     function findPartner(userSocket) {
         let partnerIndex = -1;
 
-        // 1. محاولة البحث عن شخص لديه اهتمامات مشتركة
         if (userSocket.interests && userSocket.interests.length > 0) {
             partnerIndex = waitingUsers.findIndex(u => 
                 u.interests && u.interests.some(interest => userSocket.interests.includes(interest))
             );
         }
 
-        // 2. إذا لم يجد (أو لم يكتب اهتمامات)، ابحث عن أي شخص ليس لديه اهتمامات
         if (partnerIndex === -1) {
             partnerIndex = waitingUsers.findIndex(u => !u.interests || u.interests.length === 0);
         }
 
-        // 3. إذا كان هناك أي شخص في الانتظار كخيار أخير
         if (partnerIndex === -1 && waitingUsers.length > 0) {
             partnerIndex = 0; 
         }
 
         if (partnerIndex !== -1) {
-            let partner = waitingUsers.splice(partnerIndex, 1)[0]; // سحبه من الطابور
+            let partner = waitingUsers.splice(partnerIndex, 1)[0];
             
             userSocket.partner = partner;
             partner.partner = userSocket;
 
-            // التحقق من وجود اهتمامات مشتركة لإرسال رسالة مخصصة
             let common = [];
             if (userSocket.interests && partner.interests) {
                 common = userSocket.interests.filter(i => partner.interests.includes(i));
@@ -51,35 +60,55 @@ io.on('connection', (socket) => {
             userSocket.emit('chat start', msg);
             partner.emit('chat start', msg);
         } else {
-            // وضعه في طابور الانتظار
             waitingUsers.push(userSocket);
             userSocket.emit('waiting', 'جاري البحث عن شخص للدردشة...');
         }
     }
 
-    // بدء المحادثة مع الاهتمامات
     socket.on('start chat', (interests) => {
-        // تحويل النص إلى مصفوفة اهتمامات
         socket.interests = interests.split(',').map(i => i.trim()).filter(i => i !== "");
         findPartner(socket);
     });
 
-    // تخطي (البحث عن شخص جديد)
     socket.on('next', () => {
         if (socket.partner) {
             socket.partner.emit('partner disconnected', 'الشخص الآخر غادر المحادثة.');
             socket.partner.partner = null;
             socket.partner = null;
         }
-        // إزالة من طابور الانتظار إن كان موجوداً
         waitingUsers = waitingUsers.filter(u => u.id !== socket.id);
-        
-        socket.emit('system clear'); // تنظيف الشاشة
+        socket.emit('system clear');
         findPartner(socket);
     });
 
     socket.on('chat message', (msg) => {
+        // 2. التحقق من الكلمات المسيئة قبل إرسال الرسالة
+        let isBadWord = badWords.some(word => msg.includes(word));
+        if (isBadWord) {
+            socket.emit('system warning', 'تم حجب رسالتك لأنها تحتوي على كلمات غير لائقة.');
+            return; // إيقاف إرسال الرسالة للطرف الآخر
+        }
+
         if (socket.partner) socket.partner.emit('chat message', msg);
+    });
+
+    // 3. نظام التبليغ والحظر
+    socket.on('report', () => {
+        if (socket.partner) {
+            // جلب الـ IP الخاص بالشخص المسيء
+            const partnerIp = socket.partner.handshake.headers['x-forwarded-for'] || socket.partner.request.connection.remoteAddress;
+            
+            // إضافته لقائمة الحظر
+            bannedIPs.push(partnerIp);
+
+            // إرسال رسالة طرد للمسيء وقطع اتصاله
+            socket.partner.emit('banned', 'تم الإبلاغ عنك وحظرك من الموقع.');
+            socket.partner.disconnect();
+
+            // إبلاغك بنجاح العملية
+            socket.emit('system warning', 'تم طرد هذا الشخص وحظره بنجاح. شكراً لتبليغك.');
+            socket.partner = null;
+        }
     });
 
     socket.on('typing', () => {
