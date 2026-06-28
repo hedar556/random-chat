@@ -3,15 +3,13 @@ const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 
-// تحديد المجلد الذي يحتوي على واجهة الموقع
 app.use(express.static('public'));
 
 let waitingUser = null;
 
 io.on('connection', (socket) => {
-    console.log('مستخدم جديد متصل:', socket.id);
+    console.log('مستخدم متصل:', socket.id);
 
-    // نظام البحث عن شريك (Matchmaking)
     if (waitingUser) {
         socket.partner = waitingUser;
         waitingUser.partner = socket;
@@ -24,11 +22,22 @@ io.on('connection', (socket) => {
         socket.emit('waiting', 'جاري البحث عن شخص للدردشة...');
     }
 
+    // استقبال وإرسال الرسائل
     socket.on('chat message', (msg) => {
         if (socket.partner) {
             socket.partner.emit('chat message', msg);
         }
     });
+
+    // --- الميزة الجديدة: مؤشر الكتابة ---
+    socket.on('typing', () => {
+        if (socket.partner) socket.partner.emit('typing');
+    });
+
+    socket.on('stop typing', () => {
+        if (socket.partner) socket.partner.emit('stop typing');
+    });
+    // ------------------------------------
 
     socket.on('disconnect', () => {
         if (socket.partner) {
@@ -41,7 +50,8 @@ io.on('connection', (socket) => {
     });
 });
 
+// هذا السطر ليناسب الاستضافة (Render) وجهازك
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => {
-    console.log(`الخادم يعمل بنجاح على http://localhost:${PORT}`);
+    console.log(`الخادم يعمل بنجاح على المنفذ ${PORT}`);
 });
