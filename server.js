@@ -3,132 +3,99 @@ const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 
+// تحديد المجلد الذي يحتوي على واجهة الموقع
 app.use(express.static('public'));
 
-let waitingUsers = [];
-let bannedIPs = []; // قائمة عناوين الـ IP المحظورة
-
-// قائمة الكلمات الممنوعة (يمكنك إضافة المزيد داخل الأقواس)
-const badWords = ['كلمة1', 'كلمة2', 'سيء'];
+// إنشاء طابورين منفصلين: واحد للنص والآخر للفيديو
+let waitingText = [];
+let waitingVideo = [];
 
 io.on('connection', (socket) => {
-    // الحصول على عنوان الـ IP الحقيقي للمستخدم (مهم جداً في الاستضافات مثل Render)
-    const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.request.connection.remoteAddress;
+    console.log('مستخدم متصل:', socket.id);
 
-    // 1. التحقق مما إذا كان المستخدم محظوراً قبل السماح له بالدخول
-    if (bannedIPs.includes(clientIp)) {
-        socket.emit('banned', 'لقد تم حظرك من استخدام الموقع بسبب انتهاك القوانين.');
-        socket.disconnect(); // قطع الاتصال فوراً
-        return;
-    }
+    // دالة للبحث عن شريك بناءً على اختيار المستخدم (نص أو فيديو)
+    function findPartner(type) {
+        let queue = type === 'video' ? waitingVideo : waitingText;
 
-    console.log('مستخدم متصل:', socket.id, 'IP:', clientIp);
+        if (queue.length > 0) {
+            let partner = queue.shift(); // سحب أول شخص من قائمة الانتظار
+            socket.partner = partner;
+            partner.partner = socket;
 
-    // دالة البحث عن شريك (مع الاهتمامات)
-    function findPartner(userSocket) {
-        let partnerIndex = -1;
-
-        if (userSocket.interests && userSocket.interests.length > 0) {
-            partnerIndex = waitingUsers.findIndex(u => 
-                u.interests && u.interests.some(interest => userSocket.interests.includes(interest))
-            );
-        }
-
-        if (partnerIndex === -1) {
-            partnerIndex = waitingUsers.findIndex(u => !u.interests || u.interests.length === 0);
-        }
-
-        if (partnerIndex === -1 && waitingUsers.length > 0) {
-            partnerIndex = 0; 
-        }
-
-        if (partnerIndex !== -1) {
-            let partner = waitingUsers.splice(partnerIndex, 1)[0];
-            
-            userSocket.partner = partner;
-            partner.partner = userSocket;
-
-            let common = [];
-            if (userSocket.interests && partner.interests) {
-                common = userSocket.interests.filter(i => partner.interests.includes(i));
+            if (type === 'video') {
+                // إرسال إشعار المطابقة مع تحديد من سيقوم بإنشاء الاتصال (WebRTC)
+                socket.emit('match', { message: 'تم العثور على شخص، جاري فتح الكاميرا...', isCaller: true });
+                partner.emit('match', { message: 'تم العثور على شخص، جاري فتح الكاميرا...', isCaller: false });
+            } else {
+                // إشعار الدردشة النصية العادية
+                socket.emit('chat start', 'تم العثور على شخص غريب، يمكنك التحدث الآن!');
+                partner.emit('chat start', 'تم العثور على شخص غريب، يمكنك التحدث الآن!');
             }
-
-            let msg = common.length > 0 
-                ? `تم العثور على شخص يشاركك الاهتمام بـ: ${common.join('، ')}` 
-                : 'تم العثور على شخص غريب، يمكنك التحدث الآن!';
-
-            userSocket.emit('chat start', msg);
-            partner.emit('chat start', msg);
         } else {
-            waitingUsers.push(userSocket);
-            userSocket.emit('waiting', 'جاري البحث عن شخص للدردشة...');
+            // إذا لم يجد أحداً، يضعه في القائمة المناسبة
+            queue.push(socket);
+            socket.emit('waiting', 'جاري البحث عن شخص...');
         }
     }
 
-    socket.on('start chat', (interests) => {
-        socket.interests = interests.split(',').map(i => i.trim()).filter(i => i !== "");
-        findPartner(socket);
+    // 1. استقبال طلب بدء الدردشة من الواجهة
+    socket.on('start', (type) => {
+        socket.chatType = type; // حفظ نوع الدردشة الخاص بهذا المستخدم
+        findPartner(type);
     });
 
+    // 2. زر التخطي (Next)
     socket.on('next', () => {
         if (socket.partner) {
-            socket.partner.emit('partner disconnected', 'الشخص الآخر غادر المحادثة.');
+            socket.partner.emit('partner disconnected', 'الشخص الآخر غادر.');
             socket.partner.partner = null;
             socket.partner = null;
         }
-        waitingUsers = waitingUsers.filter(u => u.id !== socket.id);
+        
+        // إزالة المستخدم من أي طابور لتجنب الأخطاء
+        waitingText = waitingText.filter(u => u.id !== socket.id);
+        waitingVideo = waitingVideo.filter(u => u.id !== socket.id);
+        
         socket.emit('system clear');
-        findPartner(socket);
+        
+        // البحث عن شخص جديد بنفس النوع الذي اختاره مسبقاً
+        if (socket.chatType) {
+            findPartner(socket.chatType);
+        }
     });
 
+    // 3. إرسال واستقبال الرسائل النصية
     socket.on('chat message', (msg) => {
-        // 2. التحقق من الكلمات المسيئة قبل إرسال الرسالة
-        let isBadWord = badWords.some(word => msg.includes(word));
-        if (isBadWord) {
-            socket.emit('system warning', 'تم حجب رسالتك لأنها تحتوي على كلمات غير لائقة.');
-            return; // إيقاف إرسال الرسالة للطرف الآخر
-        }
-
-        if (socket.partner) socket.partner.emit('chat message', msg);
-    });
-
-    // 3. نظام التبليغ والحظر
-    socket.on('report', () => {
         if (socket.partner) {
-            // جلب الـ IP الخاص بالشخص المسيء
-            const partnerIp = socket.partner.handshake.headers['x-forwarded-for'] || socket.partner.request.connection.remoteAddress;
-            
-            // إضافته لقائمة الحظر
-            bannedIPs.push(partnerIp);
-
-            // إرسال رسالة طرد للمسيء وقطع اتصاله
-            socket.partner.emit('banned', 'تم الإبلاغ عنك وحظرك من الموقع.');
-            socket.partner.disconnect();
-
-            // إبلاغك بنجاح العملية
-            socket.emit('system warning', 'تم طرد هذا الشخص وحظره بنجاح. شكراً لتبليغك.');
-            socket.partner = null;
+            socket.partner.emit('chat message', msg);
         }
     });
 
-    socket.on('typing', () => {
-        if (socket.partner) socket.partner.emit('typing');
+    // 4. أحداث تبادل إشارات الفيديو (WebRTC)
+    socket.on('offer', (offer) => {
+        if (socket.partner) socket.partner.emit('offer', offer);
     });
 
-    socket.on('stop typing', () => {
-        if (socket.partner) socket.partner.emit('stop typing');
+    socket.on('answer', (answer) => {
+        if (socket.partner) socket.partner.emit('answer', answer);
     });
 
+    socket.on('ice-candidate', (candidate) => {
+        if (socket.partner) socket.partner.emit('ice-candidate', candidate);
+    });
+
+    // 5. الانقطاع المفاجئ عن الموقع
     socket.on('disconnect', () => {
         if (socket.partner) {
-            socket.partner.emit('partner disconnected', 'الشخص الآخر غادر المحادثة.');
+            socket.partner.emit('partner disconnected', 'الشخص الآخر غادر.');
             socket.partner.partner = null;
         }
-        waitingUsers = waitingUsers.filter(u => u.id !== socket.id);
+        waitingText = waitingText.filter(u => u.id !== socket.id);
+        waitingVideo = waitingVideo.filter(u => u.id !== socket.id);
     });
 });
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => {
-    console.log(`الخادم يعمل بنجاح على المنفذ ${PORT}`);
+    console.log(`الخادم الشامل يعمل بنجاح على المنفذ ${PORT}`);
 });
