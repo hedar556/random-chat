@@ -3,14 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>دردشة عشوائية شاملة | نص وفيديو</title>
+    <title>أومي-شات | دردشة فيديو ونص</title>
     <style>
+        /* ================= المتغيرات والألوان ================= */
         :root {
-            --bg-color: #f0f2f5; --chat-bg: #ffffff; --text-main: #1c1e21;
-            --text-muted: #8b929a; --msg-mine: #ffce00; --msg-other: #e4e6eb;
-            --accent: #333333; --border: #e0e0e0; --danger: #ff4757;
+            --bg-color: #f3f4f6;
+            --app-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --primary: #3b82f6; /* أزرق عصري */
+            --primary-hover: #2563eb;
+            --secondary: #10b981; /* أخضر للنجاح */
+            --danger: #ef4444; /* أحمر للتخطي والخطأ */
+            --msg-mine: #3b82f6;
+            --msg-mine-text: #ffffff;
+            --msg-other: #f3f4f6;
+            --msg-other-text: #1f2937;
+            --border: #e5e7eb;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            --radius: 16px;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+        body.dark-mode {
+            --bg-color: #111827;
+            --app-bg: #1f2937;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --primary: #3b82f6;
+            --msg-mine: #3b82f6;
+            --msg-other: #374151;
+            --msg-other-text: #f9fafb;
+            --border: #374151;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        /* ================= الإعدادات العامة ================= */
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
         
         body { 
             background-color: var(--bg-color); color: var(--text-main);
@@ -19,58 +47,99 @@
         }
 
         .app-container { 
-            width: 100%; max-width: 800px; height: 100dvh;
-            background: var(--chat-bg); display: flex; flex-direction: column; 
+            width: 100%; max-width: 900px; height: 100dvh;
+            background: var(--app-bg); display: flex; flex-direction: column; 
             position: relative; overflow: hidden;
         }
 
         @media (min-width: 800px) {
-            .app-container { height: 90vh; border-radius: 15px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+            .app-container { height: 92vh; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); }
         }
 
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid var(--border); background: var(--chat-bg); z-index: 10; }
-        .header h1 { font-size: 20px; margin: 0; }
+        /* ================= الهيدر والوضع الليلي ================= */
+        .header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 15px 25px; border-bottom: 1px solid var(--border); 
+            background: var(--app-bg); z-index: 10;
+        }
+        .header h1 { font-size: 22px; font-weight: 800; color: var(--primary); margin: 0; letter-spacing: -0.5px;}
         
-        /* شاشة الاختيار (نص أو فيديو) */
-        #selectionScreen { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; text-align: center; background: var(--chat-bg); }
-        #selectionScreen h2 { font-size: 24px; margin-bottom: 30px; color: var(--text-main); }
-        .choice-btn { width: 100%; max-width: 300px; padding: 20px; margin: 10px; font-size: 18px; font-weight: bold; border: none; border-radius: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: transform 0.2s; }
-        .choice-btn:active { transform: scale(0.95); }
-        .btn-text { background-color: var(--text-main); color: white; }
-        .btn-video { background-color: var(--danger); color: white; }
+        .theme-toggle {
+            background: var(--msg-other); border: none; padding: 8px 12px;
+            border-radius: 20px; cursor: pointer; font-size: 16px;
+            color: var(--text-main); box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
 
-        /* واجهة الدردشة الرئيسية */
-        #chatScreen { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+        /* ================= إدارة الشاشات ================= */
+        .screen { display: none; flex: 1; flex-direction: column; overflow: hidden; width: 100%; }
+        .screen.active { display: flex; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ================= شاشة تسجيل الدخول ================= */
+        .auth-container { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; text-align: center; }
+        .auth-box { background: var(--bg-color); padding: 30px; border-radius: var(--radius); width: 100%; max-width: 350px; border: 1px solid var(--border); }
+        .auth-box h2 { margin-bottom: 20px; font-size: 24px; }
+        .input-group { margin-bottom: 15px; text-align: right; }
+        .input-group input { 
+            width: 100%; padding: 12px 15px; border: 1px solid var(--border); 
+            border-radius: 10px; background: var(--app-bg); color: var(--text-main); font-size: 16px; outline: none;
+        }
+        .input-group input:focus { border-color: var(--primary); }
+        .auth-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .auth-btn { flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: bold; font-size: 16px; cursor: pointer; color: white; }
+        .btn-login { background-color: var(--primary); }
+        .btn-register { background-color: var(--secondary); }
+        #authError { color: var(--danger); margin-top: 15px; font-size: 14px; font-weight: bold; display: none; }
+
+        /* ================= شاشة اختيار نوع الدردشة ================= */
+        .selection-content { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; text-align: center; }
+        .choice-btn { 
+            width: 100%; max-width: 320px; padding: 20px; margin: 10px 0; 
+            font-size: 18px; font-weight: bold; border: none; border-radius: 15px; 
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); color: white;
+        }
+        .choice-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
+        .choice-btn:active { transform: translateY(0); }
+        .btn-text { background: linear-gradient(135deg, #6b7280, #374151); }
+        .btn-video { background: linear-gradient(135deg, var(--primary), #8b5cf6); }
+
+        /* ================= شاشة الدردشة ================= */
+        .partner-info { background: var(--bg-color); padding: 10px; text-align: center; font-size: 14px; font-weight: bold; border-bottom: 1px solid var(--border); color: var(--primary); }
         
-        /* منطقة الفيديو (مقسمة 50/50) */
-        #videoContainer { display: none; width: 100%; height: 40vh; background: #000; flex-direction: row; border-bottom: 2px solid var(--accent); }
-        .video-box { flex: 1; height: 100%; position: relative; border-left: 1px solid #333; }
-        video { width: 100%; height: 100%; object-fit: cover; }
-        #localVideo { transform: scaleX(-1); } /* لجعل الكاميرا كالمرآة لك */
-        .video-label { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 5px 10px; border-radius: 10px; font-size: 12px; font-weight: bold; }
+        /* الفيديو (مقسم 50/50 بتصميم عصري) */
+        #videoContainer { width: 100%; height: 40vh; display: flex; flex-direction: row; background: #000; }
+        .video-box { flex: 1; height: 100%; position: relative; border: 2px solid var(--app-bg); overflow: hidden; }
+        video { width: 100%; height: 100%; object-fit: cover; background: #111; }
+        #localVideo { transform: scaleX(-1); } 
+        .video-label { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.5); color: white; padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: bold; backdrop-filter: blur(4px); }
 
-        /* لتصميم الهواتف (نجعل الفيديو فوق بعض ليكون أوضح) */
         @media (max-width: 600px) {
-            #videoContainer { flex-direction: column; height: 50vh; }
-            .video-box { border-left: none; border-bottom: 1px solid #333; }
+            #videoContainer { flex-direction: column; height: 45vh; }
+            .video-box { border: 1px solid var(--app-bg); border-radius: 0; }
         }
 
-        /* شريط التحكم والتخطي */
-        .top-actions { display: flex; justify-content: center; padding: 10px; background: var(--bg-color); border-bottom: 1px solid var(--border); }
-        .skip-btn { background-color: var(--msg-mine); color: black; padding: 10px 30px; border: none; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 16px; width: 100%; max-width: 300px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        /* الأزرار العلوية (التخطي والتبليغ) */
+        .top-actions { display: flex; justify-content: space-between; gap: 10px; padding: 10px 15px; background: var(--app-bg); border-bottom: 1px solid var(--border); }
+        .action-btn { flex: 1; padding: 12px; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 15px; color: white; display: flex; justify-content: center; align-items: center; gap: 5px; }
+        .btn-skip { background-color: var(--danger); }
+        .btn-report { background-color: transparent; color: var(--text-muted); border: 1px solid var(--border); }
 
-        /* منطقة الرسائل النصية */
-        .messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; background: var(--chat-bg); }
-        .message { padding: 10px 15px; border-radius: 20px; max-width: 80%; word-wrap: break-word; line-height: 1.4; font-size: 15px; }
-        .my-msg { background-color: var(--msg-mine); color: #000; align-self: flex-start; border-bottom-right-radius: 5px; }
-        .stranger-msg { background-color: var(--msg-other); color: var(--text-main); align-self: flex-end; border-bottom-left-radius: 5px; }
-        .system-msg { align-self: center; background: transparent; color: var(--text-muted); font-size: 0.9em; font-weight: bold; padding: 5px; text-align: center; }
+        /* منطقة الرسائل */
+        .messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px; background: var(--app-bg); }
+        .message { padding: 12px 16px; border-radius: 18px; max-width: 80%; word-wrap: break-word; line-height: 1.4; font-size: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .my-msg { background-color: var(--msg-mine); color: var(--msg-mine-text); align-self: flex-start; border-bottom-right-radius: 4px; }
+        .stranger-msg { background-color: var(--msg-other); color: var(--msg-other-text); align-self: flex-end; border-bottom-left-radius: 4px; border: 1px solid var(--border); }
+        .system-msg { align-self: center; background: transparent; color: var(--text-muted); font-size: 0.85em; font-weight: bold; padding: 5px; text-align: center; box-shadow: none; }
+        .system-warning { align-self: center; background: var(--danger); color: white; border-radius: 10px; font-size: 0.85em; }
 
         /* صندوق الإدخال */
-        .input-area { display: flex; padding: 10px; border-top: 1px solid var(--border); gap: 10px; background: var(--bg-color); padding-bottom: max(10px, env(safe-area-inset-bottom)); }
-        input { flex: 1; padding: 12px 20px; border: 1px solid var(--border); border-radius: 25px; outline: none; font-size: 16px; }
-        .send-btn { padding: 10px 20px; border: none; background-color: var(--accent); color: #fff; border-radius: 25px; cursor: pointer; font-weight: bold; }
-        .send-btn:disabled { background-color: var(--text-muted); cursor: not-allowed; }
+        .input-area { display: flex; padding: 12px 15px; border-top: 1px solid var(--border); gap: 10px; background: var(--app-bg); padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+        input[type="text"] { flex: 1; padding: 12px 20px; border: 1px solid var(--border); border-radius: 25px; outline: none; font-size: 15px; background: var(--bg-color); color: var(--text-main); }
+        input[type="text"]:focus { border-color: var(--primary); }
+        .send-btn { padding: 0 25px; border: none; background-color: var(--primary); color: #fff; border-radius: 25px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .send-btn:disabled { background-color: var(--text-muted); cursor: not-allowed; opacity: 0.5; }
+        .send-btn:not(:disabled):hover { background-color: var(--primary-hover); }
 
     </style>
 </head>
@@ -78,34 +147,62 @@
 
     <div class="app-container">
         <div class="header">
-            <h1>💬 دردشة عشوائية</h1>
+            <h1>أومي-شات 🌐</h1>
+            <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">🌙 ليلي</button>
         </div>
 
-        <div id="selectionScreen">
-            <h2>كيف تفضل أن تتواصل اليوم؟</h2>
-            <button class="choice-btn btn-text" onclick="startApp('text')">
-                💬 دردشة نصية فقط
-            </button>
-            <button class="choice-btn btn-video" onclick="startApp('video')">
-                🎥 دردشة فيديو (مع نص)
-            </button>
-            <p id="camError" style="color: var(--danger); margin-top: 15px; font-weight: bold; display: none;">⚠️ يرجى السماح بالكاميرا أولاً</p>
+        <div id="authScreen" class="screen active">
+            <div class="auth-container">
+                <div class="auth-box">
+                    <h2>تسجيل الدخول</h2>
+                    <div class="input-group">
+                        <input type="text" id="usernameInput" placeholder="اسم المستخدم (مثال: علي)">
+                    </div>
+                    <div class="input-group">
+                        <input type="password" id="passwordInput" placeholder="كلمة المرور">
+                    </div>
+                    <div class="auth-buttons">
+                        <button class="auth-btn btn-login" id="loginBtn">دخول</button>
+                        <button class="auth-btn btn-register" id="registerBtn">حساب جديد</button>
+                    </div>
+                    <p id="authError"></p>
+                </div>
+            </div>
         </div>
 
-        <div id="chatScreen">
-            <div id="videoContainer">
+        <div id="selectionScreen" class="screen">
+            <div class="selection-content">
+                <h2 style="margin-bottom: 10px;">أهلاً بك <span id="welcomeName" style="color: var(--primary);"></span> 👋</h2>
+                <p style="color: var(--text-muted); margin-bottom: 30px;">اختر طريقة التواصل للبدء</p>
+                
+                <button class="choice-btn btn-text" onclick="startApp('text')">
+                    💬 دردشة نصية فقط
+                </button>
+                <button class="choice-btn btn-video" onclick="startApp('video')">
+                    🎥 دردشة فيديو (مع نص)
+                </button>
+                <p id="camError" style="color: var(--danger); margin-top: 15px; font-weight: bold; display: none;">⚠️ يرجى السماح بالكاميرا أولاً</p>
+            </div>
+        </div>
+
+        <div id="chatScreen" class="screen">
+            
+            <div id="partnerInfo" class="partner-info">جاري البحث...</div>
+
+            <div id="videoContainer" style="display: none;">
                 <div class="video-box">
                     <video id="localVideo" autoplay muted playsinline></video>
                     <div class="video-label">أنت</div>
                 </div>
                 <div class="video-box">
                     <video id="remoteVideo" autoplay playsinline></video>
-                    <div class="video-label">الغريب</div>
+                    <div class="video-label" id="partnerVideoLabel">الغريب</div>
                 </div>
             </div>
 
             <div class="top-actions">
-                <button class="skip-btn" id="nextBtn">تخطي (شخص جديد) ⏭️</button>
+                <button class="action-btn btn-skip" id="nextBtn">⏭️ تخطي</button>
+                <button class="action-btn btn-report" id="reportBtn" style="display: none;">🚫 إبلاغ</button>
             </div>
             
             <div class="messages" id="messages"></div>
@@ -121,21 +218,35 @@
     <script>
         const socket = io();
         
-        // عناصر الواجهة
+        // جلب عناصر الواجهة
+        const authScreen = document.getElementById('authScreen');
         const selectionScreen = document.getElementById('selectionScreen');
         const chatScreen = document.getElementById('chatScreen');
+        
+        const usernameInput = document.getElementById('usernameInput');
+        const passwordInput = document.getElementById('passwordInput');
+        const loginBtn = document.getElementById('loginBtn');
+        const registerBtn = document.getElementById('registerBtn');
+        const authError = document.getElementById('authError');
+        const welcomeName = document.getElementById('welcomeName');
+
         const videoContainer = document.getElementById('videoContainer');
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
+        const partnerInfo = document.getElementById('partnerInfo');
+        const partnerVideoLabel = document.getElementById('partnerVideoLabel');
+        
         const messages = document.getElementById('messages');
         const msgInput = document.getElementById('msgInput');
         const sendBtn = document.getElementById('sendBtn');
         const nextBtn = document.getElementById('nextBtn');
+        const reportBtn = document.getElementById('reportBtn');
         const camError = document.getElementById('camError');
 
         let currentChatType = '';
         let localStream;
         let peerConnection;
+        let myUsername = '';
         
         const iceServers = {
             'iceServers': [
@@ -144,7 +255,55 @@
             ]
         };
 
-        // دالة إضافة الرسائل النصية
+        // ================= نظام الوضع الليلي =================
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            const btn = document.getElementById('themeToggle');
+            if(document.body.classList.contains('dark-mode')) {
+                btn.innerHTML = "☀️ فاتح";
+                localStorage.setItem('theme', 'dark');
+            } else {
+                btn.innerHTML = "🌙 ليلي";
+                localStorage.setItem('theme', 'light');
+            }
+        }
+        if(localStorage.getItem('theme') === 'dark') toggleTheme();
+
+        // ================= الانتقال بين الشاشات =================
+        function showScreen(screenElement) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            screenElement.classList.add('active');
+        }
+
+        // ================= نظام الحسابات (Auth) =================
+        loginBtn.addEventListener('click', () => {
+            if(!usernameInput.value || !passwordInput.value) return showAuthError("يرجى ملء جميع الحقول");
+            socket.emit('login', { username: usernameInput.value.trim(), password: passwordInput.value });
+        });
+
+        registerBtn.addEventListener('click', () => {
+            if(!usernameInput.value || !passwordInput.value) return showAuthError("يرجى ملء جميع الحقول");
+            socket.emit('register', { username: usernameInput.value.trim(), password: passwordInput.value });
+        });
+
+        function showAuthError(msg) {
+            authError.textContent = msg;
+            authError.style.display = 'block';
+        }
+
+        socket.on('auth_error', (msg) => showAuthError(msg));
+        
+        socket.on('auth_success', (data) => {
+            myUsername = data.user.username;
+            welcomeName.textContent = myUsername;
+            showScreen(selectionScreen); // الانتقال لاختيار نوع الدردشة
+        });
+
+        socket.on('banned', (msg) => {
+            document.body.innerHTML = `<h1 style="color:red; text-align:center; margin-top:50px;">🚫<br>${msg}</h1>`;
+        });
+
+        // ================= الرسائل النصية والواجهة =================
         function addMessage(text, type) {
             const div = document.createElement('div');
             div.textContent = text; 
@@ -153,69 +312,75 @@
             messages.scrollTop = messages.scrollHeight;
         }
 
-        // 1. بدء التطبيق بناءً على الاختيار
+        // ================= بدء الدردشة =================
         async function startApp(type) {
             currentChatType = type;
             camError.style.display = 'none';
 
             if (type === 'video') {
                 try {
-                    // طلب الكاميرا أولاً
                     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                     localVideo.srcObject = localStream;
-                    videoContainer.style.display = 'flex'; // إظهار الشاشة المقسمة
+                    videoContainer.style.display = 'flex';
                 } catch (err) {
                     camError.style.display = 'block';
-                    return; // إيقاف العملية إذا رفض الكاميرا
+                    return; 
                 }
             } else {
-                videoContainer.style.display = 'none'; // إخفاء الفيديو في الدردشة النصية
+                videoContainer.style.display = 'none';
             }
 
-            // إخفاء شاشة الاختيار وإظهار الدردشة
-            selectionScreen.style.display = 'none';
-            chatScreen.style.display = 'flex';
-            
-            // إخبار الخادم بنوع الدردشة للبحث عن شريك
+            showScreen(chatScreen);
             socket.emit('start', type);
         }
 
-        // 2. زر التخطي (Next)
+        // زر التخطي
         nextBtn.addEventListener('click', () => {
-            msgInput.disabled = true; 
-            sendBtn.disabled = true;
+            msgInput.disabled = true; sendBtn.disabled = true; reportBtn.style.display = 'none';
+            partnerInfo.textContent = "جاري البحث عن شخص جديد...";
+            partnerVideoLabel.textContent = "الغريب";
             
-            // تنظيف مكالمة الفيديو السابقة
             if (peerConnection) {
                 peerConnection.close();
                 peerConnection = null;
             }
             remoteVideo.srcObject = null;
-            
             socket.emit('next');
         });
 
-        // 3. أحداث النظام من الخادم
-        socket.on('waiting', (msg) => addMessage(msg, 'system-msg'));
+        // زر التبليغ
+        reportBtn.addEventListener('click', () => {
+            if(confirm("هل أنت متأكد من الإبلاغ عن هذا الشخص وحظره؟")) {
+                socket.emit('report');
+                reportBtn.style.display = 'none';
+            }
+        });
+
+        // ================= أحداث الخادم (Socket) =================
+        socket.on('waiting', (msg) => {
+            addMessage(msg, 'system-msg');
+            partnerInfo.textContent = "🔍 " + msg;
+            reportBtn.style.display = 'none';
+        });
         
         socket.on('chat start', (msg) => {
             addMessage(msg, 'system-msg');
+            partnerInfo.textContent = msg;
             msgInput.disabled = false; sendBtn.disabled = false; msgInput.focus();
+            reportBtn.style.display = 'block';
         });
 
         socket.on('system clear', () => { messages.innerHTML = ''; });
+        socket.on('system warning', (msg) => { addMessage(msg, 'system-msg system-warning'); });
         
         socket.on('partner disconnected', (msg) => {
             addMessage(msg, 'system-msg');
-            msgInput.disabled = true; sendBtn.disabled = true;
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
-            }
+            partnerInfo.textContent = "⚠️ " + msg;
+            msgInput.disabled = true; sendBtn.disabled = true; reportBtn.style.display = 'none';
+            if (peerConnection) { peerConnection.close(); peerConnection = null; }
             remoteVideo.srcObject = null;
         });
 
-        // إرسال واستقبال الرسائل النصية
         function sendMessage() {
             const text = msgInput.value.trim();
             if (text) {
@@ -229,18 +394,17 @@
         
         socket.on('chat message', (msg) => addMessage(msg, 'stranger-msg'));
 
-        // ----------------------------------------------------
-        // 4. محرك الـ WebRTC (مكالمة الفيديو)
-        // ----------------------------------------------------
-        
+        // ================= محرك الـ WebRTC (مكالمة الفيديو) =================
         socket.on('match', (data) => {
             addMessage(data.message, 'system-msg');
-            msgInput.disabled = false; sendBtn.disabled = false;
+            partnerInfo.textContent = `مكالمة مع ${data.partnerData.username} من [${data.partnerData.country}]`;
+            partnerVideoLabel.textContent = data.partnerData.username;
             
-            // تفعيل الفيديو فقط إذا كان هذا هو اختيار المستخدم
+            msgInput.disabled = false; sendBtn.disabled = false;
+            reportBtn.style.display = 'block';
+            
             if (currentChatType === 'video') {
                 createPeerConnection();
-
                 if (data.isCaller) {
                     peerConnection.createOffer()
                         .then(offer => peerConnection.setLocalDescription(offer))
@@ -270,19 +434,16 @@
         function createPeerConnection() {
             peerConnection = new RTCPeerConnection(iceServers);
 
-            // إرسال الكاميرا والصوت للطرف الآخر
             if (localStream) {
                 localStream.getTracks().forEach(track => {
                     peerConnection.addTrack(track, localStream);
                 });
             }
 
-            // استقبال وعرض كاميرا الغريب
             peerConnection.ontrack = (event) => {
                 remoteVideo.srcObject = event.streams[0];
             };
 
-            // اكتشاف مسارات الاتصال
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
                     socket.emit('ice-candidate', event.candidate);
